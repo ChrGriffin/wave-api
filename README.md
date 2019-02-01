@@ -1,1 +1,1 @@
-# wave-api
+# chrgriffin/wave-api

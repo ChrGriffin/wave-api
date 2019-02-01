@@ -1,0 +1,25 @@
+{
+    "name": "chrgriffin/wave-api",
+    "description": "Simple PHP client to utilize Webaim's WAVE API.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Christian Griffin",
+            "email": "christian.griffin@live.com"
+        }
+    ],
+    "require": {
+        "php": "^7.1.",
+        "guzzlehttp/guzzle": "^6.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^7.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "ChrGriffin\\WaveApi\\": "src",
+            "ChrGriffin\\WaveApi\\Tests\\": "tests"
+        }
+    }
+}
