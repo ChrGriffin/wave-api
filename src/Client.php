@@ -41,7 +41,7 @@ class Client
     protected $client;
 
     /**
-     * @return Client|mixed
+     * @return GuzzleClient|mixed
      */
     public function getClient()
     {
