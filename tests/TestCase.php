@@ -28,6 +28,24 @@ abstract class TestCase extends PHPUnit
     }
 
     /**
+     * @param string $contents
+     * @return \stdClass
+     */
+    protected function decodeJsonFixture(string $contents) : \stdClass
+    {
+        return json_decode($contents);
+    }
+
+    /**
+     * @param string $contents
+     * @return \SimpleXMLElement
+     */
+    protected function decodeXmlFixture(string $contents) : \SimpleXMLElement
+    {
+        return simplexml_load_string($contents);
+    }
+
+    /**
      * @param Closure $logic
      * @param array $params
      * @param bool $assertNotEmpty

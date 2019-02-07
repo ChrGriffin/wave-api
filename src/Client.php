@@ -3,7 +3,8 @@
 namespace ChrGriffin\WaveApi;
 
 use GuzzleHttp\Client as GuzzleClient;
-use ChrGriffin\WaveApi\Exceptions\{ InvalidArgumentException };
+use ChrGriffin\WaveApi\Exceptions\{ InvalidArgumentException, ResponseException };
+use TypeError;
 
 class Client
 {
@@ -11,13 +12,13 @@ class Client
      * @const array
      */
     const REQUEST_PARAMS = [
-        'key',
-        'format',
-        'viewportwidth',
-        'evaldelay',
-        'reporttype',
-        'username',
-        'password'
+        'key'           => 'string',
+        'format'        => 'string',
+        'viewportwidth' => 'integer',
+        'evaldelay'     => 'integer',
+        'reporttype'    => 'integer',
+        'username'      => 'string',
+        'password'      => 'string'
     ];
 
     /**
@@ -83,7 +84,7 @@ class Client
     /**
      * @var string
      */
-    protected $format;
+    protected $format = 'json';
 
     /**
      * @return string|null
@@ -100,12 +101,20 @@ class Client
      */
     public function setFormat(string $format) : Client
     {
+        $this->checkFormatIsValid($format);
+        $this->format = $format;
+        return $this;
+    }
+
+    /**
+     * @param string $format
+     * @throws InvalidArgumentException
+     */
+    protected function checkFormatIsValid(string $format) : void
+    {
         if(!in_array($format, self::FORMATS)) {
             throw new InvalidArgumentException("$format is not a valid format.");
         }
-
-        $this->format = $format;
-        return $this;
     }
 
     /**
@@ -174,12 +183,20 @@ class Client
      */
     public function setReporttype(int $reporttype) : Client
     {
-        if(!in_array($reporttype, self::REPORT_TYPES)) {
-            throw new InvalidArgumentException("$reporttype is not a valid report type.");
-        }
-
+        $this->checkReportTypeIsValid($reporttype);
         $this->reporttype = $reporttype;
         return $this;
+    }
+
+    /**
+     * @param int $reportType
+     * @throws InvalidArgumentException
+     */
+    protected function checkReportTypeIsValid(int $reportType) : void
+    {
+        if(!in_array($reportType, self::REPORT_TYPES)) {
+            throw new InvalidArgumentException("$reportType is not a valid report type.");
+        }
     }
 
     /**
@@ -229,24 +246,28 @@ class Client
     }
 
     /**
-     * @var \Psr\Http\Message\ResponseInterface
+     * @var string
      */
-    protected $response;
-
-    /**
-     * @return \Psr\Http\Message\ResponseInterface
-     */
-    public function getResponse()
-    {
-        return $this->response;
-    }
+    protected $responseContents;
 
     /**
      * @return string
      */
     public function getResponseContent()
     {
-        return $this->response->getBody()->getContents();
+        return $this->responseContents;
+    }
+
+    /**
+     * @param array $params
+     * @return void
+     */
+    public function setParams(array $params) : void
+    {
+        foreach($params as $param => $value) {
+            $this->checkParamExists($param);
+            $this->{'set' . ucfirst($param)}($value);
+        }
     }
 
     /**
@@ -258,15 +279,9 @@ class Client
     public function __construct(string $key, array $params = [], $client = null)
     {
         $this->key = $key;
+        $this->setParams($params);
 
-        foreach($params as $param => $value) {
-            if(!in_array($param, static::REQUEST_PARAMS)) {
-                throw new InvalidArgumentException("$param is not a valid parameter.");
-            }
-            $this->{'set' . ucfirst($param)}($value);
-        }
-
-        if($client == null) {
+        if($client === null) {
             $client = new GuzzleClient([
                 'base_uri' => 'http://wave.webaim.org/api/'
             ]);
@@ -278,21 +293,63 @@ class Client
     /**
      * @param string $url
      * @param array $params
-     * @return $this
+     * @return mixed
+     * @throws InvalidArgumentException
+     * @throws ResponseException
+     * @throws TypeError
      */
-    public function analyze(string $url, array $params = []) : Client
+    public function analyze(string $url, array $params = [])
     {
-        foreach($params as $param => $value) {
-            if(!in_array($param, static::REQUEST_PARAMS)) {
-                throw new InvalidArgumentException("$param is not a valid parameter.");
-            }
+        $this->setParams($params);
+
+        $responseContents = $this->client->get('request', [
+            'query' => $this->buildRequestParams($url)
+        ])->getBody()->getContents();
+
+        return $this->responseContents = $this->{'validate' . ucfirst($this->format) . 'Response'}($responseContents);
+    }
+
+    /**
+     * @param string $contents
+     * @return \stdClass
+     * @throws ResponseException
+     */
+    protected function validateJsonResponse(string $contents) : \stdClass
+    {
+        $contents = json_decode($contents);
+
+        if(isset($contents->success) && $contents->success === false) {
+            throw new ResponseException($contents->error ?? 'Request was not successful.');
         }
 
-        $this->response = $this->client->get('request', [
-            'query' => array_merge($params, $this->buildRequestParams($url))
-        ]);
+        return $contents;
+    }
 
-        return $this;
+    /**
+     * @param string $contents
+     * @return \SimpleXMLElement
+     * @throws ResponseException
+     */
+    protected function validateXmlResponse(string $contents) : \SimpleXMLElement
+    {
+        $contents = simplexml_load_string($contents);
+        if((string)$contents->success === 'false') {
+            throw new ResponseException((string)$contents->error ?? 'Request was not successful.');
+        }
+
+        return $contents;
+    }
+
+    /**
+     * @param string $param
+     * @return void
+     * @throws InvalidArgumentException
+     */
+    protected function checkParamExists(string $param) : void
+    {
+        if(!in_array($param, array_keys(static::REQUEST_PARAMS))) {
+            throw new InvalidArgumentException("$param is not a valid parameter.");
+        }
     }
 
     /**
@@ -305,7 +362,7 @@ class Client
             'url' => $url
         ];
 
-        foreach(self::REQUEST_PARAMS as $param) {
+        foreach(array_keys(self::REQUEST_PARAMS) as $param) {
             $value = $this->{'get' . ucfirst($param)}();
             if($value) {
                 $requestParams[$param] = $value;
